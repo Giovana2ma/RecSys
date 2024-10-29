@@ -96,23 +96,27 @@ class Funksvd:
         for start in range(0, len(X), batch_size):
             # Define the mini-batch range
             end = start + batch_size
-            batch_user_indices = np.unique(user_indices[start:end])
-            batch_item_indices = np.unique(item_indices[start:end])
-            batch_ratings = ratings[start:end]
+
+            batch_user_indices, user_order = np.unique(user_indices[start:end], return_index=True)
+            batch_user_indices = batch_user_indices[np.argsort(user_order)]
             
+            batch_item_indices, item_order = np.unique(item_indices[start:end], return_index=True)
+            batch_item_indices = batch_item_indices[np.argsort(item_order)]
 
+            batch_ratings = ratings[start:end]
+           
             # Calculate predictions for the batch
-            pred  = p @ q.T
+            pred  = p[batch_user_indices] @ q[batch_item_indices].T
             pred  += self.global_mean 
-            pred  += bu.reshape(-1,1)
-            pred  += bi.reshape(1,-1)
+            pred  += bu[batch_user_indices].reshape(-1,1)
+            pred  += bi[batch_item_indices].reshape(1,-1)
 
-            # U * F * I
-
-            a = user_indices[start:end]
-            b = item_indices[start:end]
-            pred_in_batch = pred[a,b]
-
+            # Map batch_item_indices to pred columns for each original item index in batch_ratings
+            item_to_pred_col = {item: idx for idx, item in enumerate(batch_item_indices)}
+            mapped_pred_indices = np.array([item_to_pred_col[item] for item in  batch_item_indices])
+            
+            pred_in_batch= pred[np.arange(len(batch_ratings)), mapped_pred_indices]
+            
             # Calculate error
             err = batch_ratings - pred_in_batch
 
